@@ -1,5 +1,6 @@
-from enum import Enum
+from enum import IntEnum
 import numpy as np
+import matplotlib.pyplot as plt
 
 class Agent:
     def __init__(self, actions):
@@ -13,7 +14,7 @@ class Agent:
         return Agent(self.actions)
 
 class World:
-    class Action(Enum):
+    class Action(IntEnum):
         UP, DOWN, LEFT, RIGHT, NIL = range(5)
 
     ACTIONS = list(Action)
@@ -27,9 +28,9 @@ class World:
 
     def __init__(self, size, productionRate, consumptionRate,
             initStrength, windowSize):
-        self.resourceGrid = np.ones(size, size)
-        self.agentGrid = np.zeros(size, size)
-        self.tempAgentGrid = np.empty([size, size, len(ACTIONS) + 2],
+        self.resourceGrid = np.ones([size, size])
+        self.agentGrid = np.zeros([size, size])
+        self.tempAgentGrid = np.empty([size, size, len(World.ACTIONS) + 2],
                 dtype=np.object)
         self.productionRate = productionRate
         self.consumptionRate = consumptionRate
@@ -43,8 +44,8 @@ class World:
         while x1 == x2 and y1 == y2:
             x2 = np.random.randint(size)
             y2 = np.random.randint(size)
-        self.situatedAgents = [SituatedAgent(Agent(ACTIONS), x1, y1,
-            initStrength), SituatedAgent(Agent(ACTIONS), x2, y2,
+        self.situatedAgents = [World.SituatedAgent(Agent(World.ACTIONS), x1, y1,
+            initStrength), World.SituatedAgent(Agent(World.ACTIONS), x2, y2,
             initStrength)]
         for a in self.situatedAgents:
             self.agentGrid[a.x, a.y] = 1
@@ -69,14 +70,14 @@ class World:
                 ss = np.concatenate([a[x1:, y1:], ss])
             if x2 > self.size:
                 ss = np.concatenate([ss, a[:x2 - self.size, y1:]])
-            s = np.concatenate([ss, s] axis=1)
+            s = np.concatenate([ss, s], axis=1)
         if y2 > self.size:
             ss = a[xx1:xx2, :y2 - self.size]
             if x1 < 0:
                 ss = np.concatenate([a[x1:, :y2 - self.size], ss])
             if x2 > self.size:
                 ss = np.concatenate([ss, a[:x2 - self.size, :y2 - self.size]])
-            s = np.concatenate([s, ss] axis=1)
+            s = np.concatenate([s, ss], axis=1)
         return s
 
     def getState(self, x, y):
@@ -84,42 +85,47 @@ class World:
             self.getState2D(x, y, self.agentGrid)])
 
     def move(self, x, y, action):
-        if action == Action.UP:
+        if action == World.Action.UP:
             y += 1
-        elif action == Action.DOWN:
+        elif action == World.Action.DOWN:
             y -= 1
-        elif action == Action.LEFT:
+        elif action == World.Action.LEFT:
             x -= 1
-        elif action == Action.RIGHT:
+        elif action == World.Action.RIGHT:
             x += 1
         return x % self.size, y % self.size
 
     def moveBack(self, x, y, action):
-        if action == Action.UP:
+        print('action', action)
+        if action == World.Action.UP:
             y -= 1
-        elif action == Action.DOWN:
+        elif action == World.Action.DOWN:
             y += 1
-        elif action == Action.LEFT:
+        elif action == World.Action.LEFT:
             x += 1
-        elif action == Action.RIGHT:
+        elif action == World.Action.RIGHT:
             x -= 1
         return x % self.size, y % self.size
 
-    def breed(self, a):
+    def breed(self):
         for i in xrange(self.size):
             for j in xrange(self.size):
-                ag = self.tempAgentGrid[i, j, :len(ACTIONS)]
+                ag = self.tempAgentGrid[i, j, :len(World.ACTIONS)]
                 idx = ~np.equal(ag, None)
+                print('idx', idx)
                 if np.sum(idx) < 2:
-                    break
+                    continue
                 elif np.sum(idx) == 2:
-                    idx = np.where(idx)
+                    idx, = np.where(idx)
                 else:
                     v = np.zeros(len(ag))
                     v[idx] = [x.strength for x in ag[idx]]
                     idx = np.argsort(v)[-2:]
+                print('breed:', i, j)
+                print('locs:', w.situatedAgents[0].x, w.situatedAgents[0].y,
+                    w.situatedAgents[1].x, w.situatedAgents[1].y)
                 parents = ag[idx]
-                newborn = SituatedAgent(parents[0].agent.mate(parents[1].agent),
+                newborn = World.SituatedAgent(parents[0].agent.mate(parents[1].agent),
                         parents[0].x, parents[0].y,
                         (parents[0].strength + parents[1].strength) / 2)
                 self.situatedAgents.append(newborn)
@@ -144,7 +150,7 @@ class World:
                 ag = self.tempAgentGrid[i, j, :]
                 idx = ~np.equal(ag, None)
                 if np.sum(idx) < 2:
-                    break
+                    continue
                 else:
                     ag = ag[idx]
                     v = [x.strength for x in ag]
@@ -179,15 +185,23 @@ class World:
         for a in self.situatedAgents:
             self.agentGrid[a.x, a.y] = 1
 
+    def plot(self):
+        rx, ry = np.nonzero(self.resourceGrid)
+        ax, ay = np.nonzero(self.agentGrid)
+        plt.plot(rx, ry, 'gs', ax, ay, 'ro')
+        plt.show()
+
 if __name__ == "__main__":
-    SIZE = 10
+    SIZE = 5
     WINDOWSIZE = 3
     PRODRATE = .1
     CONSUMRATE = .1
     STRENGTH = 1
     NUMSTEPS = 100
 
+    np.random.seed(0)
     w = World(SIZE, PRODRATE, CONSUMRATE, STRENGTH, WINDOWSIZE)
     for i in xrange(NUMSTEPS):
         w.step()
+        w.plot()
         print(i)
