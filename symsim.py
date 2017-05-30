@@ -96,7 +96,6 @@ class World:
         return x % self.size, y % self.size
 
     def moveBack(self, x, y, action):
-        print('action', action)
         if action == World.Action.UP:
             y -= 1
         elif action == World.Action.DOWN:
@@ -112,7 +111,6 @@ class World:
             for j in xrange(self.size):
                 ag = self.tempAgentGrid[i, j, :len(World.ACTIONS)]
                 idx = ~np.equal(ag, None)
-                print('idx', idx)
                 if np.sum(idx) < 2:
                     continue
                 elif np.sum(idx) == 2:
@@ -121,9 +119,6 @@ class World:
                     v = np.zeros(len(ag))
                     v[idx] = [x.strength for x in ag[idx]]
                     idx = np.argsort(v)[-2:]
-                print('breed:', i, j)
-                print('locs:', w.situatedAgents[0].x, w.situatedAgents[0].y,
-                    w.situatedAgents[1].x, w.situatedAgents[1].y)
                 parents = ag[idx]
                 newborn = World.SituatedAgent(parents[0].agent.mate(parents[1].agent),
                         parents[0].x, parents[0].y,
@@ -202,6 +197,7 @@ if __name__ == "__main__":
     np.random.seed(0)
     w = World(SIZE, PRODRATE, CONSUMRATE, STRENGTH, WINDOWSIZE)
     for i in xrange(NUMSTEPS):
-        w.step()
-        w.plot()
         print(i)
+        w.step()
+
+    w.plot()
