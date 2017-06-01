@@ -25,6 +25,9 @@ class World:
             self.x = x
             self.y = y
             self.strength = strength
+            self.age = 0
+            self.kills = 0
+            self.offspring = 0
 
     def __init__(self, size, productionRate, consumptionRate,
             initStrength, windowSize):
@@ -107,6 +110,7 @@ class World:
         return x % self.size, y % self.size
 
     def breed(self):
+        offspring = 0
         for i in xrange(self.size):
             for j in xrange(self.size):
                 ag = self.tempAgentGrid[i, j, :len(World.ACTIONS)]
@@ -127,11 +131,15 @@ class World:
                 self.tempAgentGrid[i, j, -2] = newborn
                 parents[0].strength /= 2
                 parents[1].strength /= 2
+                parents[0].offspring += 1
+                parents[1].offspring += 1
+                offspring += 1
                 self.tempAgentGrid[i, j, idx] = None
                 parents[0].x, parents[0].y = self.moveBack(i, j, idx[0])
                 self.tempAgentGrid[parents[0].x, parents[0].y, -1] = parents[0]
                 parents[1].x, parents[1].y = self.moveBack(i, j, idx[1])
                 self.tempAgentGrid[parents[1].x, parents[1].y, -1] = parents[1]
+        return offspring
 
     def act(self):
         for agent in self.situatedAgents:
@@ -140,6 +148,7 @@ class World:
             self.tempAgentGrid[agent.x, agent.y, action] = agent
 
     def battle(self):
+        kills = 0
         for i in xrange(self.size):
             for j in xrange(self.size):
                 ag = self.tempAgentGrid[i, j, :]
@@ -149,11 +158,14 @@ class World:
                 else:
                     ag = ag[idx]
                     v = [x.strength for x in ag]
-                    idx = np.argsort(v)[:-1]
-                    for a in ag[idx]:
-                        a.strength = 0
+                    idx = np.argsort(v)
+                    for ii in idx[:-1]:
+                        ag[ii].strength = 0
+                ag[idx[-1]].kills += len(idx) - 1
+                kills += len(idx) - 1
         self.situatedAgents = filter(lambda a: a.strength > 0,
             self.situatedAgents)
+        return kills
 
     def consume(self):
         for a in self.situatedAgents:
@@ -169,16 +181,20 @@ class World:
     def step(self):
         # Reset
         self.tempAgentGrid[:,:,:] = None
+
         # Life cycle
         self.act()
-        self.breed()
-        self.battle()
+        offspring = self.breed()
+        kills = self.battle()
         self.consume()
         self.produce()
+
         # Update
         self.agentGrid[:,:] = 0
         for a in self.situatedAgents:
             self.agentGrid[a.x, a.y] = 1
+            a.age += 1
+        return offspring, kills
 
     def plot(self):
         rx, ry = np.nonzero(self.resourceGrid)
@@ -199,5 +215,3 @@ if __name__ == "__main__":
     for i in xrange(NUMSTEPS):
         print(i)
         w.step()
-
-    w.plot()
