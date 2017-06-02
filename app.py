@@ -1,7 +1,7 @@
 import numpy as np
-from bokeh.layouts import layout
+from bokeh.layouts import row, layout, column, Spacer, gridplot
 from bokeh.plotting import figure, curdoc
-from bokeh.models import Button, Slider, ColumnDataSource
+from bokeh.models import Button, Slider, ColumnDataSource, DataRange1d, LinearAxis
 from symsim import World
 
 SIZE = 10
@@ -9,9 +9,7 @@ WINDOWSIZE = 3
 PRODRATE = .1
 CONSUMRATE = .1
 STRENGTH = 1
-NUMSTEPS = 1000
-
-PLOTSIZE = 600
+NUMSTEPS = 10000
 
 np.random.seed(0)
 w = World(SIZE, PRODRATE, CONSUMRATE, STRENGTH, WINDOWSIZE)
@@ -39,44 +37,53 @@ strength = [sum(d['strength']) / len(d['strength']) for d in data]
 age = [sum(d['age']) / len(d['age']) for d in data]
 popsize = [len(d['age']) for d in data]
 
-pgrid = figure(x_range=(-.5, SIZE - .5),
+pgrid = figure(x_range=(-.5, SIZE - .5), title='Simulation',
         y_range=(-.5, SIZE - .5),
-        plot_width=PLOTSIZE,
-        plot_height=PLOTSIZE,
+        plot_width=100,
+        plot_height=100,
         tools='', toolbar_location=None,
         x_axis_location=None,
         y_axis_location=None,
         background_fill_color='blue')
 pgrid.grid.grid_line_color = None
-resgriddata = ColumnDataSource(dict(x=data[0]['rx'], y=data[0]['ry']))
-agentgriddata = ColumnDataSource(dict(x=data[0]['ax'], y=data[0]['ay']))
+resgriddata = ColumnDataSource(dict(x=data[-1]['rx'], y=data[-1]['ry']))
+agentgriddata = ColumnDataSource(dict(x=data[-1]['ax'], y=data[-1]['ay']))
 pgrid.rect('x', 'y', 1, 1, source=resgriddata, color='green')
 pgrid.rect('x', 'y', 1, 1, source=agentgriddata, color='red')
 
-phealth = figure(title='Population health')
+timesource = ColumnDataSource(dict(x=[len(strength) - 1], strength=[strength[-1]],
+    age=[age[-1]], popsize=[popsize[-1]], kills=[kills[-1]],
+        offspring=[offspring[-1]]))
+
+phealth = figure(title='Health', width=200, height=100)
 phealth.line(range(len(strength)), strength, legend='avg strength')
 phealth.line(range(len(age)), age, legend='avg age', color='orange')
-healthsource = ColumnDataSource(dict(x=[0], strength=[strength[0]],
-    age=[age[0]]))
-phealth.circle('x', 'strength', source=healthsource)
-phealth.circle('x', 'age', source=healthsource, color='orange')
+phealth.circle('x', 'strength', source=timesource)
+phealth.circle('x', 'age', source=timesource, color='orange')
+phealth.legend.location = 'top_left'
 
-pgrowth = figure(title='Population growth')
-pgrowth.line(range(len(popsize)), popsize, legend='population size')
-pgrowth.line(range(len(kills)), kills, color='orange', legend='number of kills')
-pgrowth.line(range(len(offspring)), offspring, color='green', legend='number of births')
-growthsource = ColumnDataSource(dict(x=[0], popsize=[popsize[0]],
-    kills=[kills[0]], offspring=[offspring[0]]))
-pgrowth.circle('x', 'popsize', source=growthsource)
-pgrowth.circle('x', 'kills', source=growthsource, color='orange')
-pgrowth.circle('x', 'offspring', source=growthsource, color='green')
+pgrowth = figure(title='Growth', width=200, height=100, x_range=phealth.x_range)
+pgrowth.extra_y_ranges['y2'] = DataRange1d()
+pgrowth.add_layout(LinearAxis(y_range_name='y2'), 'right')
+r1 = pgrowth.line(range(len(popsize)), popsize, legend='population size')
+r2 = pgrowth.line(range(len(kills)), kills, color='orange', y_range_name='y2',
+        legend='number of kills',)
+r3 = pgrowth.line(range(len(offspring)), offspring, color='green',
+        y_range_name='y2', legend='number of births')
+pgrowth.y_range.renderers = [r1]
+pgrowth.extra_y_ranges['y2'].renderers = [r2, r3]
+pgrowth.circle('x', 'popsize', source=timesource)
+pgrowth.circle('x', 'kills', source=timesource, color='orange', y_range_name='y2')
+pgrowth.circle('x', 'offspring', source=timesource, color='green', y_range_name='y2')
+pgrowth.legend.location = 'top_left'
 
-pprofile = figure(title='Population profile', x_axis_label='kills',
-        y_axis_label='offspring')
-profilesource = ColumnDataSource(dict(age=data[0]['age'],
-    strength=data[0]['strength'], kills=data[0]['kills'],
-    offspring=data[0]['offspring']))
-pprofile.circle('kills', 'offspring', source=profilesource)
+pprofile = figure(title='Profile', x_axis_label='kills',
+        y_axis_label='offspring', width=100, height=100,
+        toolbar_location='below', toolbar_sticky=False)
+profilesource = ColumnDataSource(dict(age=data[-1]['age'],
+    strength=data[-1]['strength'], kills=data[-1]['kills'],
+    offspring=data[-1]['offspring']))
+pprofile.scatter('kills', 'offspring', source=profilesource)
 
 def animate_update():
     slider.value = (slider.value + 1) % len(data)
@@ -86,16 +93,15 @@ def slider_update(attrname, old, new):
     i = slider.value
     resgriddata.data = dict(x=data[i]['rx'], y=data[i]['ry'])
     agentgriddata.data = dict(x=data[i]['ax'], y=data[i]['ay'])
-    healthsource.data = dict(x=[i], strength=[strength[i]],
-        age=[age[i]])
-    growthsource.data = dict(x=[i], popsize=[popsize[i]],
-        kills=[kills[i]], offspring=[offspring[i]])
+    timesource.data = dict(x=[i], strength=[strength[i]],
+        age=[age[i]], popsize=[popsize[i]], kills=[kills[i]],
+        offspring=[offspring[i]])
     profilesource.data = dict(age=data[i]['age'],
         strength=data[i]['strength'], kills=data[i]['kills'],
         offspring=data[i]['offspring'])
 
 
-slider = Slider(start=0, end=len(data) - 1, value=0, step=1, title="Step")
+slider = Slider(start=0, end=len(data) - 1, value=len(data) - 1, step=1, title="Step")
 slider.on_change('value', slider_update)
 
 
@@ -110,8 +116,10 @@ def animate():
 button = Button(label='► Play', width=60)
 button.on_click(animate)
 
-layout = layout([[pgrid],
-    [slider, button],
-    [pgrowth], [phealth], [pprofile]])
+timeplots = gridplot([[pgrowth], [phealth]], responsive=True,
+        toolbar_location='below')
+layout = layout([[slider, button],
+    [pgrid, pprofile, timeplots]], responsive=True)
 
 curdoc().add_root(layout)
+curdoc().title = "SymSim"
